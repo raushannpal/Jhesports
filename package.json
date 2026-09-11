@@ -1,9 +1,10 @@
 {
   "name": "jh-esports",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "dependencies": {
     "firebase-admin": "^13.4.0",
-    "razorpay": "^2.9.6"
+    "razorpay": "^2.9.6",
+    "raw-body": "^2.5.2"
   }
 }
