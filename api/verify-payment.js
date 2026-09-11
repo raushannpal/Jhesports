@@ -1,27 +1,9 @@
-const Razorpay = require("razorpay");
 const crypto = require("crypto");
-const admin = require("firebase-admin");
-
-function firebase() {
-  if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
-      }),
-      databaseURL: process.env.FIREBASE_DATABASE_URL
-    });
-  }
-  return admin;
-}
+const Razorpay = require("razorpay");
+const getFirebase = require("./_firebase");
+const creditPayment = require("./_credit-payment");
 
 module.exports = async (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
-  if (req.method === "OPTIONS") return res.status(204).end();
-
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -33,10 +15,11 @@ module.exports = async (req, res) => {
       return res.status(401).json({ error: "Login required." });
     }
 
-    const firebaseAdmin = firebase();
-    const decoded = await firebaseAdmin
-      .auth()
-      .verifyIdToken(authHeader.slice(7));
+    const admin = getFirebase();
+
+    const decoded = await admin.auth().verifyIdToken(
+      authHeader.slice(7)
+    );
 
     const {
       razorpay_order_id,
@@ -50,18 +33,24 @@ module.exports = async (req, res) => {
       !razorpay_signature
     ) {
       return res.status(400).json({
-        error: "Payment details are missing."
+        error: "Missing payment details."
       });
     }
 
-    const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+    const generatedSignature = crypto
+      .createHmac(
+        "sha256",
+        process.env.RAZORPAY_KEY_SECRET
+      )
+      .update(
+        razorpay_order_id + "|" + razorpay_payment_id
+      )
       .digest("hex");
 
     if (
+      generatedSignature.length !== razorpay_signature.length ||
       !crypto.timingSafeEqual(
-        Buffer.from(expectedSignature),
+        Buffer.from(generatedSignature),
         Buffer.from(razorpay_signature)
       )
     ) {
@@ -75,12 +64,35 @@ module.exports = async (req, res) => {
       key_secret: process.env.RAZORPAY_KEY_SECRET
     });
 
-    const payment = await razorpay.payments.fetch(razorpay_payment_id);
-    const order = await razorpay.orders.fetch(razorpay_order_id);
+    const payment = await razorpay.payments.fetch(
+      razorpay_payment_id
+    );
+
+    const order = await razorpay.orders.fetch(
+      razorpay_order_id
+    );
 
     if (payment.status !== "captured") {
       return res.status(400).json({
-        error: "Payment has not been captured."
+        error: "Payment is not captured."
+      });
+    }
+
+    if (payment.order_id !== order.id) {
+      return res.status(400).json({
+        error: "Payment/order mismatch."
+      });
+    }
+
+    if (order.notes?.uid !== decoded.uid) {
+      return res.status(403).json({
+        error: "Payment user mismatch."
+      });
+    }
+
+    if (order.notes?.purpose !== "wallet_recharge") {
+      return res.status(400).json({
+        error: "Invalid payment purpose."
       });
     }
 
@@ -90,74 +102,26 @@ module.exports = async (req, res) => {
       });
     }
 
-    if (
-      !order.notes ||
-      order.notes.uid !== decoded.uid ||
-      order.notes.purpose !== "wallet_recharge"
-    ) {
-      return res.status(403).json({
-        error: "Payment does not belong to this account."
-      });
-    }
-
-    const db = firebaseAdmin.database();
-
-    const creditRef = db.ref(
-      `paymentCredits/${razorpay_payment_id}`
-    );
-
-    const existing = await creditRef.once("value");
-
-    if (existing.exists()) {
-      return res.status(200).json({
-        success: true,
-        alreadyCredited: true,
-        message: "Payment already credited."
-      });
-    }
-
-    const amountRupees = Number(order.amount) / 100;
-
-    const balanceRef = db.ref(`users/${decoded.uid}/balance`);
-
-    await balanceRef.transaction((currentBalance) => {
-      const current = Number(currentBalance || 0);
-      return current + amountRupees;
-    });
-
-    const transactionRef = db.ref(`transactions/${decoded.uid}`).push();
-
-    await transactionRef.set({
-      type: "credit",
-      amount: amountRupees,
-      method: "Razorpay",
-      paymentId: razorpay_payment_id,
-      orderId: razorpay_order_id,
-      status: "success",
-      createdAt: Date.now()
-    });
-
-    await creditRef.set({
+    const result = await creditPayment({
       uid: decoded.uid,
-      amount: amountRupees,
-      orderId: razorpay_order_id,
       paymentId: razorpay_payment_id,
-      status: "credited",
-      createdAt: Date.now()
+      orderId: razorpay_order_id,
+      amount: Number(order.amount) / 100
     });
 
     return res.status(200).json({
       success: true,
-      credited: true,
-      amount: amountRupees,
-      message: `₹${amountRupees} added to wallet successfully.`
+      credited: !result.alreadyCredited,
+      alreadyCredited: result.alreadyCredited,
+      amount: result.amount,
+      balance: result.balance
     });
 
   } catch (error) {
     console.error("VERIFY PAYMENT ERROR:", error);
 
     return res.status(500).json({
-      error: error.message || "Payment verification failed."
+      error: "Payment verification failed."
     });
   }
 };
