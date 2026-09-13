@@ -611,13 +611,55 @@
                         <!-- Login Form -->
                         <form id="emailLoginForm">
                             <h2 class="card-title text-center mb-4">Login</h2>
-                            <div class="mb-3"> <label for="loginEmailInputEl" class="form-label">Email or Phone Number</label> <input type="text" class="form-control" id="loginEmailInputEl" placeholder="Enter your email or phone number" required> </div>
+                            <div class="mb-3"> <label for="loginEmailInputEl" class="form-label">Email</label> <input type="email" class="form-control" id="loginEmailInputEl" placeholder="Enter your email" required> </div>
                             <div class="mb-3"> <label for="loginPasswordInputEl" class="form-label">Password</label> <input type="password" class="form-control" id="loginPasswordInputEl" placeholder="Password" required> </div>
                             <div id="loginStatusMessageEl" class="alert mt-3" style="display: none;"></div>
-                            <div class="d-grid gap-2 mb-3"> <button type="button" class="btn btn-custom btn-custom-primary" id="loginEmailBtnEl">Login</button> <button type="button" class="btn-custom-link btn-sm p-0 text-center d-block" id="showSignupToggleBtnEl">Need an account? Sign Up</button> <a href="#" id="forgotPasswordLinkEl" class="text-center small mt-2 d-block" style="color: var(--text-secondary);">Forgot Password?</a> </div>
+                            <div class="d-grid gap-2 mb-2">
+                                <button type="button" class="btn btn-custom btn-custom-primary" id="loginEmailBtnEl">Login</button>
+
+                                <button type="button" class="btn-custom-link btn-sm p-0 text-center d-block" id="showSignupToggleBtnEl" style="color:var(--primary-color); font-weight:500;">Need an account? <span style="color:var(--primary-color);">Sign Up</span></button>
+
+                                <a href="#" id="forgotPasswordLinkEl" class="text-center small mt-1 d-block" style="color:#fff; text-decoration:none;">Forgot Password?</a>
+                            </div>
+
+                            <div class="d-flex align-items-center my-3" style="gap:12px;">
+                                <div style="height:1px; flex:1; background:rgba(255,255,255,.18);"></div>
+                                <span style="font-size:12px; color:var(--text-secondary); font-weight:600;">OR</span>
+                                <div style="height:1px; flex:1; background:rgba(255,255,255,.18);"></div>
+                            </div>
+
+                            <div class="d-grid gap-2">
+                                <button type="button" class="btn btn-sm" id="loginGoogleBtnEl" style="min-height:44px; border:1px solid rgba(255,255,255,.18); background:#fff; color:#222; font-weight:600; border-radius:8px;">
+                                    <i class="bi bi-google me-2"></i> Login with Google
+                                </button>
+                                <button type="button" class="btn btn-sm" id="showPhoneLoginBtnEl" style="min-height:44px; border:1px solid rgba(255,255,255,.18); background:#fff; color:#222; font-weight:600; border-radius:8px;">
+                                    <i class="bi bi-phone me-2"></i> Login with Phone Number
+                                </button>
+                            </div>
                         </form>
 
+                        <!-- Phone OTP Login -->
+                        <div id="phoneLoginPanelEl" style="display:none;">
+                            <h2 class="card-title text-center mb-4">Phone Login</h2>
+                            <div class="mb-3">
+                                <label for="phoneLoginInputEl" class="form-label">Phone Number</label>
+                                <input type="tel" class="form-control" id="phoneLoginInputEl" inputmode="tel" autocomplete="tel" placeholder="10 digit mobile number">
+                            </div>
+                            <div id="recaptcha-container" class="mb-3"></div>
+                            <button type="button" class="btn btn-custom btn-custom-primary w-100" id="sendPhoneOtpBtnEl">Send OTP</button>
+                            <div id="phoneOtpAreaEl" style="display:none;" class="mt-3">
+                                <div class="mb-3">
+                                    <label for="phoneOtpInputEl" class="form-label">Enter OTP</label>
+                                    <input type="text" class="form-control" id="phoneOtpInputEl" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 digit OTP">
+                                </div>
+                                <button type="button" class="btn btn-custom btn-custom-accent w-100" id="verifyPhoneOtpBtnEl">Verify OTP & Login</button>
+                            </div>
+                            <div id="phoneLoginStatusEl" class="alert mt-3" style="display:none;"></div>
+                            <button type="button" class="btn-custom-link btn-sm p-0 text-center d-block mx-auto mt-3" id="backToEmailLoginBtnEl">← Back to Email Login</button>
+                        </div>
+
                         <!-- Signup Form -->
+
                         <form id="emailSignupForm" style="display: none;">
                             <h2 class="card-title text-center mb-4">Sign Up</h2>
                             <div class="mb-3"> <label for="signupNameInputEl" class="form-label">Name</label> <input type="text" class="form-control" id="signupNameInputEl" placeholder="Enter your name" required> </div>
@@ -1122,7 +1164,7 @@
         // Firebase Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
         import { getDatabase, ref, get, set, update, push, query, orderByChild, equalTo, onValue, runTransaction, off, limitToLast, serverTimestamp, limitToFirst, onChildAdded } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
-        import { getAuth, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, reauthenticateWithCredential, EmailAuthProvider, updatePassword } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+        import { getAuth, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, reauthenticateWithCredential, EmailAuthProvider, updatePassword, GoogleAuthProvider, signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 
         // MODIFICATION START: Admin se control karne ke liye note
         // ADMIN NOTE: Apne Firebase project ki config yahan daalein.
@@ -1141,6 +1183,8 @@
         // MODIFICATION END
 
         let app, db, auth;
+        let phoneConfirmationResult = null;
+        let phoneRecaptchaVerifier = null;
         try {
             app = initializeApp(firebaseConfig);
             db = getDatabase(app);
@@ -1158,7 +1202,7 @@
              sections: querySelAll('.section'), bottomNavItems: querySelAll('.bottom-nav .nav-item'), globalLoader: getElement('globalLoaderEl'),
              headerBackBtn: getElement('headerBackBtnEl'), headerTitleContainer: getElement('headerTitleContainerEl'), headerGameTitle: getElement('headerGameTitleEl'), headerWalletChip: getElement('headerWalletChipEl'), headerChipBalance: getElement('headerChipBalanceEl'), headerUserGreeting: getElement('headerUserGreetingEl'), appLogo: getElement('appLogoEl'), notificationBtn: getElement('notificationBtnEl'), notificationBadge: querySel('.notification-badge'),
              loginSection: getElement('login-section'),
-             emailLoginForm: getElement('emailLoginForm'), loginEmailInput: getElement('loginEmailInputEl'), loginPasswordInput: getElement('loginPasswordInputEl'), loginEmailBtn: getElement('loginEmailBtnEl'), showSignupToggleBtn: getElement('showSignupToggleBtnEl'), loginStatusMessage: getElement('loginStatusMessageEl'), forgotPasswordLink: getElement('forgotPasswordLinkEl'),
+             emailLoginForm: getElement('emailLoginForm'), loginEmailInput: getElement('loginEmailInputEl'), loginPasswordInput: getElement('loginPasswordInputEl'), loginEmailBtn: getElement('loginEmailBtnEl'), showSignupToggleBtn: getElement('showSignupToggleBtnEl'), loginStatusMessage: getElement('loginStatusMessageEl'), forgotPasswordLink: getElement('forgotPasswordLinkEl'), loginGoogleBtn: getElement('loginGoogleBtnEl'), showPhoneLoginBtn: getElement('showPhoneLoginBtnEl'), phoneLoginPanel: getElement('phoneLoginPanelEl'), phoneLoginInput: getElement('phoneLoginInputEl'), sendPhoneOtpBtn: getElement('sendPhoneOtpBtnEl'), phoneOtpArea: getElement('phoneOtpAreaEl'), phoneOtpInput: getElement('phoneOtpInputEl'), verifyPhoneOtpBtn: getElement('verifyPhoneOtpBtnEl'), phoneLoginStatus: getElement('phoneLoginStatusEl'), backToEmailLoginBtn: getElement('backToEmailLoginBtnEl'),
              emailSignupForm: getElement('emailSignupForm'), signupNameInput: getElement('signupNameInputEl'), signupEmailInput: getElement('signupEmailInputEl'), signupPhoneInput: getElement('signupPhoneInputEl'), signupPasswordInput: getElement('signupPasswordInputEl'), signupConfirmPasswordInput: getElement('signupConfirmPasswordInputEl'), signupReferralCodeInput: getElement('signupReferralCodeInputEl'), signupEmailBtn: getElement('signupEmailBtnEl'), showLoginToggleBtn: getElement('showLoginToggleBtnEl'), signupStatusMessage: getElement('signupStatusMessageEl'),
              homeSection: getElement('home-section'), announcementBar: getElement('announcementBarEl'), announcementText: getElement('announcementTextEl'), promotionSlider: getElement('promotionSliderEl'), gamesList: getElement('gamesListEl'), contestStatusNav: getElement('contestStatusNavEl'),
              myContestsSection: getElement('my-contests-section'), myContestsList: getElement('myContestsListEl'), noContestsMessage: getElement('noContestsMessageEl'),
@@ -1409,24 +1453,145 @@ https://adixclash.wuaze.com/?i=1`;
         }
         // MODIFICATION END
 
-         function updateGlobalUI(isLoggedIn) { if (elements.headerWalletChip) { elements.headerWalletChip.style.display = isLoggedIn ? 'flex' : 'none'; if (isLoggedIn) elements.headerWalletChip.onclick = () => showSection('wallet-section'); else elements.headerWalletChip.onclick = null; } if (!isLoggedIn && elements.headerUserGreeting) elements.headerUserGreeting.textContent = 'Guest'; if (!isLoggedIn && elements.headerChipBalance) elements.headerChipBalance.textContent = '0'; elements.bottomNavItems.forEach(item => { const section = item.dataset.section; item.style.display = (section === 'home-section' || isLoggedIn) ? 'flex' : 'none'; }); }
+         function updateGlobalUI(isLoggedIn) {
+             // Login/signup/phone screens should be clean auth screens — no app header or bottom navigation.
+             const appHeader = document.querySelector('.app-header');
+             if (appHeader) appHeader.style.display = isLoggedIn ? '' : 'none';
+
+             if (elements.headerWalletChip) {
+                 elements.headerWalletChip.style.display = isLoggedIn ? 'flex' : 'none';
+                 if (isLoggedIn) elements.headerWalletChip.onclick = () => showSection('wallet-section');
+                 else elements.headerWalletChip.onclick = null;
+             }
+             if (!isLoggedIn && elements.headerUserGreeting) elements.headerUserGreeting.textContent = 'Guest';
+             if (!isLoggedIn && elements.headerChipBalance) elements.headerChipBalance.textContent = '0';
+
+             // Never show Home/other bottom-nav items while logged out.
+             elements.bottomNavItems.forEach(item => {
+                 item.style.display = isLoggedIn ? 'flex' : 'none';
+             });
+         }
          function populateUserInfo(user, profile) { if (!user || !profile) return; const displayName = profile.displayName || user.email?.split('@')[0] || 'User'; const photoURL = profile.photoURL || user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0F172A&color=E2E8F0&bold=true&size=70`; const balance = (profile.balance || 0); const winningCash = (profile.winningCash || 0); const bonusCash = (profile.bonusCash || 0); const totalEarnings = (profile.totalEarnings || 0); const referralEarnings = (profile.referralEarnings || 0); const totalMatches = profile.totalMatches || 0; const wonMatches = profile.wonMatches || 0; const formatCurrency = (amount) => `₹ ${amount.toFixed(2)}`; if (elements.headerUserGreeting) elements.headerUserGreeting.textContent = displayName.split(' ')[0]; if (elements.headerChipBalance) elements.headerChipBalance.textContent = Math.floor(balance); if (elements.walletTotalBalance) { elements.walletTotalBalance.textContent = formatCurrency(balance); removePlaceholders(elements.walletTotalBalance.closest('.placeholder-glow')); } if (elements.walletWinningCash) { elements.walletWinningCash.textContent = formatCurrency(winningCash); removePlaceholders(elements.walletWinningCash.closest('.placeholder-glow')); } if (elements.walletBonusCash) { elements.walletBonusCash.textContent = formatCurrency(bonusCash); removePlaceholders(elements.walletBonusCash.closest('.placeholder-glow')); } if (elements.withdrawModalBalance) elements.withdrawModalBalance.textContent = formatCurrency(winningCash); if (elements.rechargeBalanceDisplay) elements.rechargeBalanceDisplay.textContent = balance.toFixed(2); if (elements.profileAvatar) elements.profileAvatar.src = photoURL; if (elements.profileName) { elements.profileName.textContent = displayName; removePlaceholders(elements.profileName.closest('.placeholder-glow')); } if (elements.profileEmail) { elements.profileEmail.textContent = user.email || user.phoneNumber || 'N/A'; removePlaceholders(elements.profileEmail.closest('.placeholder-glow')); } if (elements.profileTotalMatches) { elements.profileTotalMatches.textContent = totalMatches; removePlaceholders(elements.profileTotalMatches.closest('.placeholder-glow')); } if (elements.profileWonMatches) { elements.profileWonMatches.textContent = wonMatches; removePlaceholders(elements.profileWonMatches.closest('.placeholder-glow')); } if (elements.profileTotalEarnings) { elements.profileTotalEarnings.textContent = formatCurrency(profile.totalEarnings || 0); removePlaceholders(elements.profileTotalEarnings.closest('.placeholder-glow')); } if (elements.earningsTotal) { elements.earningsTotal.textContent = formatCurrency(totalEarnings); removePlaceholders(elements.earningsTotal.closest('.placeholder-glow')); } if (elements.earningsReferral) { elements.earningsReferral.textContent = formatCurrency(referralEarnings); removePlaceholders(elements.earningsReferral.closest('.placeholder-glow')); } if (elements.modalUserEmail) elements.modalUserEmail.textContent = user.email || 'N/A'; }
         
-        function toggleAuthForm(formToShow) {
-            [elements.emailLoginForm, elements.emailSignupForm].forEach(formEl => {
-                if (formEl) formEl.style.display = 'none';
-            });
-            clearStatusMessage(elements.loginStatusMessage);
-            clearStatusMessage(elements.signupStatusMessage);
+                 function toggleAuthForm(formToShow) {
+             [elements.emailLoginForm, elements.emailSignupForm, elements.phoneLoginPanel].forEach(formEl => {
+                 if (formEl) formEl.style.display = 'none';
+             });
+             clearStatusMessage(elements.loginStatusMessage);
+             clearStatusMessage(elements.signupStatusMessage);
+             clearStatusMessage(elements.phoneLoginStatus);
+             if (elements.phoneOtpArea) elements.phoneOtpArea.style.display = 'none';
+             phoneConfirmationResult = null;
+             if (formToShow === 'login') {
+                 elements.emailLoginForm.style.display = 'block';
+             } else if (formToShow === 'signup') {
+                 elements.emailSignupForm.style.display = 'block';
+             } else if (formToShow === 'phone') {
+                 elements.phoneLoginPanel.style.display = 'block';
+                 setTimeout(() => initPhoneRecaptcha(), 100);
+             }
+         }
 
-            if (formToShow === 'login') {
-                elements.emailLoginForm.style.display = 'block';
-            } else if (formToShow === 'signup') {
-                elements.emailSignupForm.style.display = 'block';
-            }
-        }
-        
-        async function signUpWithEmail() { 
+         function normalizeIndianPhone(value) {
+             let phone = (value || '').replace(/\s|-/g, '');
+             if (/^\d{10}$/.test(phone)) phone = '+91' + phone;
+             else if (/^91\d{10}$/.test(phone)) phone = '+' + phone;
+             return phone;
+         }
+
+         function initPhoneRecaptcha() {
+             if (!auth || phoneRecaptchaVerifier) return phoneRecaptchaVerifier;
+             try {
+                 phoneRecaptchaVerifier = new RecaptchaVerifier(auth, 'sendPhoneOtpBtnEl', {
+                     size: 'invisible',
+                     callback: () => console.log('Phone reCAPTCHA verified.'),
+                     'expired-callback': () => { phoneRecaptchaVerifier = null; }
+                 });
+                 return phoneRecaptchaVerifier;
+             } catch (e) {
+                 console.error('reCAPTCHA init error:', e);
+                 showStatusMessage(elements.phoneLoginStatus, 'reCAPTCHA could not load. Refresh the page and try again.', 'danger');
+                 return null;
+             }
+         }
+
+         async function sendPhoneOTP() {
+             if (!auth) return;
+             const phone = normalizeIndianPhone(elements.phoneLoginInput.value);
+             if (!/^\+91\d{10}$/.test(phone)) {
+                 showStatusMessage(elements.phoneLoginStatus, 'Enter a valid 10 digit Indian mobile number.', 'warning');
+                 return;
+             }
+             showLoader(true);
+             clearStatusMessage(elements.phoneLoginStatus);
+             try {
+                 const verifier = initPhoneRecaptcha();
+                 if (!verifier) throw new Error('reCAPTCHA is not ready.');
+                 phoneConfirmationResult = await signInWithPhoneNumber(auth, phone, verifier);
+                 elements.phoneOtpArea.style.display = 'block';
+                 showStatusMessage(elements.phoneLoginStatus, 'OTP sent. Check your SMS.', 'success');
+                 elements.phoneOtpInput.focus();
+             } catch (e) {
+                 console.error('Phone OTP Error:', e);
+                 phoneConfirmationResult = null;
+                 if (phoneRecaptchaVerifier) { try { phoneRecaptchaVerifier.clear(); } catch (_) {} phoneRecaptchaVerifier = null; }
+                 let m = 'Could not send OTP.';
+                 switch (e.code) {
+                     case 'auth/invalid-phone-number': m = 'Invalid phone number.'; break;
+                     case 'auth/too-many-requests': m = 'Too many OTP requests. Please wait and try again later.'; break;
+                     case 'auth/quota-exceeded': m = 'SMS quota exceeded. Try again later.'; break;
+                     case 'auth/captcha-check-failed': m = 'reCAPTCHA check failed. Refresh and try again.'; break;
+                     case 'auth/operation-not-allowed': m = 'Phone sign-in is not enabled in Firebase.'; break;
+                     case 'auth/network-request-failed': m = 'Network error. Check your internet connection.'; break;
+                     default: m = e.message || m;
+                 }
+                 showStatusMessage(elements.phoneLoginStatus, m, 'danger');
+             } finally { showLoader(false); }
+         }
+
+         async function verifyPhoneOTP() {
+             if (!phoneConfirmationResult) { showStatusMessage(elements.phoneLoginStatus, 'First request an OTP.', 'warning'); return; }
+             const otp = (elements.phoneOtpInput.value || '').trim();
+             if (!/^\d{6}$/.test(otp)) { showStatusMessage(elements.phoneLoginStatus, 'Enter the 6 digit OTP.', 'warning'); return; }
+             showLoader(true);
+             try {
+                 await phoneConfirmationResult.confirm(otp);
+                 phoneConfirmationResult = null;
+             } catch (e) {
+                 console.error('OTP Verify Error:', e);
+                 let m = 'Invalid OTP.';
+                 if (e.code === 'auth/code-expired') m = 'OTP expired. Request a new OTP.';
+                 else if (e.code === 'auth/invalid-verification-code') m = 'Incorrect OTP. Check and try again.';
+                 else if (e.code === 'auth/account-exists-with-different-credential') m = 'This phone is already associated with another sign-in method.';
+                 else if (e.message) m = e.message;
+                 showStatusMessage(elements.phoneLoginStatus, m, 'danger');
+             } finally { showLoader(false); }
+         }
+
+         async function loginWithGoogle() {
+             if (!auth) return;
+             showLoader(true);
+             clearStatusMessage(elements.loginStatusMessage);
+             try {
+                 const provider = new GoogleAuthProvider();
+                 provider.setCustomParameters({ prompt: 'select_account' });
+                 await signInWithPopup(auth, provider);
+             } catch (e) {
+                 console.error('Google Login Error:', e);
+                 let m = 'Google login failed.';
+                 switch (e.code) {
+                     case 'auth/popup-closed-by-user': m = 'Google login cancelled.'; break;
+                     case 'auth/popup-blocked': m = 'Google popup was blocked. Allow popups and try again.'; break;
+                     case 'auth/unauthorized-domain': m = 'Add this website domain to Firebase Authentication > Settings > Authorized domains.'; break;
+                     case 'auth/account-exists-with-different-credential': m = 'This email already uses another login method. Use Email Login for that account.'; break;
+                     case 'auth/network-request-failed': m = 'Network error. Check your internet connection.'; break;
+                     default: m = e.message || m;
+                 }
+                 showStatusMessage(elements.loginStatusMessage, m, 'danger');
+             } finally { showLoader(false); }
+         }
+
+async function signUpWithEmail() { 
             if (!auth) return; 
             const name = elements.signupNameInput.value.trim(); 
             const em = elements.signupEmailInput.value.trim(); 
@@ -2623,7 +2788,12 @@ https://adixclash.wuaze.com/?i=1`;
              elements.tournamentTabs?.forEach(tab => tab.addEventListener('click', (e) => { const s = e.currentTarget.dataset.status; if (currentTournamentGameId && s) { elements.tournamentTabs.forEach(t => t.classList.remove('active')); e.currentTarget.classList.add('active'); filterTournaments(currentTournamentGameId, s); } }));
              
              elements.loginEmailBtn?.addEventListener('click', loginWithEmail);
-             elements.signupEmailBtn?.addEventListener('click', signUpWithEmail);
+              elements.loginGoogleBtn?.addEventListener('click', loginWithGoogle);
+              elements.showPhoneLoginBtn?.addEventListener('click', () => toggleAuthForm('phone'));
+              elements.sendPhoneOtpBtn?.addEventListener('click', sendPhoneOTP);
+              elements.verifyPhoneOtpBtn?.addEventListener('click', verifyPhoneOTP);
+              elements.backToEmailLoginBtn?.addEventListener('click', () => toggleAuthForm('login'));
+              elements.signupEmailBtn?.addEventListener('click', signUpWithEmail);
              elements.showSignupToggleBtn?.addEventListener('click', () => toggleAuthForm('signup'));
              elements.showLoginToggleBtn?.addEventListener('click', () => toggleAuthForm('login'));
              elements.forgotPasswordLink?.addEventListener('click', (e) => { e.preventDefault(); resetPassword(); });
