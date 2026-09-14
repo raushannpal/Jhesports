@@ -4,16 +4,28 @@ import { getDatabase } from 'firebase-admin/database';
 
 function getAdmin() {
   if (!getApps().length) {
-    if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not configured');
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+
+    if (!projectId || !clientEmail || !privateKey || !process.env.FIREBASE_DATABASE_URL) {
+      throw new Error('Firebase Admin environment variables are incomplete');
     }
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+
     initializeApp({
-      credential: cert(serviceAccount),
-      databaseURL: process.env.FIREBASE_DATABASE_URL || `https://${serviceAccount.project_id}-default-rtdb.firebaseio.com`
+      credential: cert({
+        projectId,
+        clientEmail,
+        privateKey
+      }),
+      databaseURL: process.env.FIREBASE_DATABASE_URL
     });
   }
-  return { auth: getAuth(), db: getDatabase() };
+
+  return {
+    auth: getAuth(),
+    db: getDatabase()
+  };
 }
 
 export { getAdmin };
